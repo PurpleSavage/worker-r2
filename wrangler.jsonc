@@ -10,18 +10,20 @@
 	"observability": {
 		"enabled": true
 	},
+	"vars": {
+    "WEBHOOK_URL": "https://unbounded-postbox-pretext.ngrok-free.dev/docengine/wherehouse/proposal/webhook",
+    "WEBHOOK_SECRET": "polygon_webhook_secret_2026"
+  },
 	"queues": {
 		"consumers": [
 			{
-				"queue": "my-queue"
-			}
+        "queue": "r2-processing-file-queue",
+        "max_batch_size": 5,
+        "max_retries": 5, 
+        "dead_letter_queue": "r2-failed-webhooks-dlq" 
+      }
 		],
-		"producers": [
-			{
-				"binding": "MY_QUEUE",
-				"queue": "my-queue"
-			}
-		]
+
 	},
 	"upload_source_maps": true
 	/**

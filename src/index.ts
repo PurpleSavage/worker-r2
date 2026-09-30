@@ -1,41 +1,57 @@
-/**
- * Welcome to Cloudflare Workers!
- *
- * This is a template for a Queue consumer: a Worker that can consume from a
- * Queue: https://developers.cloudflare.com/queues/get-started/
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+export interface Env {
+	WEBHOOK_URL: string;
+	WEBHOOK_SECRET: string;
+}
+
+interface R2EventNotification {
+	account: string;
+	bucket: string;
+	object: {
+		key: string;
+		size: number;
+		eTag: string;
+	};
+	action: string;
+	eventTime: string;
+}
 
 export default {
-	// Our fetch handler is invoked on a HTTP request: we can send a message to a queue
-	// during (or after) a request.
-	// https://developers.cloudflare.com/queues/platform/javascript-apis/#producer
-	async fetch(req, env, ctx): Promise<Response> {
-		// To send a message on a queue, we need to create the queue first
-		// https://developers.cloudflare.com/queues/get-started/#3-create-a-queue
-		await env.MY_QUEUE.send({
-			url: req.url,
-			method: req.method,
-			headers: Object.fromEntries(req.headers),
-		});
-		return new Response('Sent message to the queue');
-	},
-	// The queue handler is invoked when a batch of messages is ready to be delivered
-	// https://developers.cloudflare.com/queues/platform/javascript-apis/#messagebatch
 	async queue(batch, env): Promise<void> {
-		// A queue consumer can make requests to other endpoints on the Internet,
-		// write to R2 object storage, query a D1 Database, and much more.
 		for (let message of batch.messages) {
-			// Process each message (we'll just log these)
-			console.log(`message ${message.id} processed: ${JSON.stringify(message.body)}`);
+			// R2 envía el evento dentro del body del mensaje
+			const eventData = message.body as R2EventNotification;
+
+			const payload = {
+				event: "r2.object.created",
+				bucket: eventData.bucket,
+				fileKey: eventData.object.key,
+				sizeBytes: eventData.object.size,
+				uploadedAt: eventData.eventTime,
+			};
+
+			try {
+				const response = await fetch(env.WEBHOOK_URL, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-Webhook-Secret": env.WEBHOOK_SECRET,
+					},
+					body: JSON.stringify(payload),
+				});
+
+				if (!response.ok) {
+					console.error(`Error enviando webhook al backend. Status: ${response.status}`);
+					// Reintenta entregar el mensaje si tu backend responde con error HTTP
+					message.retry();
+					continue;
+				}
+
+				// Confirma el procesamiento exitoso
+				message.ack();
+			} catch (err) {
+				console.error("Error de conexión al enviar el webhook:", err);
+				message.retry();
+			}
 		}
 	},
-} satisfies ExportedHandler<Env, Error>;
+} satisfies ExportedHandler<Env>;
