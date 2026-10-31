@@ -1,0 +1,3 @@
+# Copia este archivo a .dev.vars para `wrangler dev` (no se sube a git).
+# Mismo valor que CLOUDFLARE_WEBHOOK_SECRET en el .env del backend local.
+WEBHOOK_SECRET=

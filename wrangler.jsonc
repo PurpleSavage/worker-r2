@@ -10,21 +10,49 @@
 	"observability": {
 		"enabled": true
 	},
+	// Entorno de DESARROLLO (wrangler deploy / wrangler dev): bucket "polygon",
+	// cola dev y backend local por ngrok. El secreto NO va aqui:
+	//   wrangler secret put WEBHOOK_SECRET            (worker desplegado)
+	//   .dev.vars                                     (wrangler dev, ver .dev.vars.example)
 	"vars": {
-    "WEBHOOK_URL": "https://unbounded-postbox-pretext.ngrok-free.dev/docengine/wherehouse/proposal/webhook",
-    "WEBHOOK_SECRET": "polygon_webhook_secret_2026",
-    "R2_PUBLIC_URL": "https://pub-ec914cf0c9fc4c6889c1d5a92cf4c6cf.r2.dev"
-  },
+		"WEBHOOK_URL": "https://unbounded-postbox-pretext.ngrok-free.dev/docengine/wherehouse/proposal/webhook",
+		// Opcional: el backend ya firma su propia URL de descarga con la clave.
+		"R2_PUBLIC_URL": "https://pub-ec914cf0c9fc4c6889c1d5a92cf4c6cf.r2.dev"
+	},
 	"queues": {
 		"consumers": [
 			{
-        "queue": "r2-processing-file-queue",
-        "max_batch_size": 5,
-        "max_retries": 5, 
-        "dead_letter_queue": "r2-failed-webhooks-dlq" 
-      }
-		],
-
+				"queue": "r2-processing-file-queue",
+				"max_batch_size": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "r2-failed-webhooks-dlq"
+			}
+		]
+	},
+	"env": {
+		// PRODUCCION: wrangler deploy --env production
+		// Se publica como "r2-file-upload-webhook-worker-production". Bucket
+		// "palamind" (privado), cola prod y backend en Render.
+		//   wrangler secret put WEBHOOK_SECRET --env production
+		// (el mismo valor que CLOUDFLARE_WEBHOOK_SECRET en Render).
+		// vars y queues no se heredan del entorno de arriba: van completos.
+		"production": {
+			"vars": {
+				"WEBHOOK_URL": "https://TU-BACKEND.onrender.com/docengine/wherehouse/proposal/webhook",
+				// Vacia: el bucket de produccion es privado.
+				"R2_PUBLIC_URL": ""
+			},
+			"queues": {
+				"consumers": [
+					{
+						"queue": "r2-processing-file-queue-prod",
+						"max_batch_size": 5,
+						"max_retries": 5,
+						"dead_letter_queue": "r2-failed-webhooks-dlq-prod"
+					}
+				]
+			}
+		}
 	},
 	"upload_source_maps": true
 	/**

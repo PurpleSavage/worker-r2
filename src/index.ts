@@ -1,7 +1,9 @@
 export interface Env {
 	WEBHOOK_URL: string;
 	WEBHOOK_SECRET: string;
-	R2_PUBLIC_URL: string;
+	// Opcional. En produccion el bucket es privado y no hay URL publica: el
+	// backend firma su propia URL de descarga con la clave del objeto.
+	R2_PUBLIC_URL?: string;
 }
 
 interface R2EventNotification {
@@ -46,18 +48,23 @@ export default {
 				continue;
 			}
 
-			// El backend descarga el archivo con http.Get (sin credenciales),
-			// así que necesita la URL pública del objeto.
-			const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
-
-			const payload = {
+			const payload: Record<string, unknown> = {
 				tenantId: tenantId,
 				bucket: eventData.bucket,
 				key: key,
-				url: publicUrl,
 				size: eventData.object.size,
 				etag: eventData.object.eTag,
 			};
+			// Solo informativo: el backend descarga con una URL firmada propia.
+			if (env.R2_PUBLIC_URL) {
+				payload.url = `${env.R2_PUBLIC_URL}/${key}`;
+			}
+
+			if (!env.WEBHOOK_SECRET) {
+				console.error("Falta WEBHOOK_SECRET (wrangler secret put WEBHOOK_SECRET)");
+				message.retry();
+				continue;
+			}
 
 			try {
 				const response = await fetch(env.WEBHOOK_URL, {
